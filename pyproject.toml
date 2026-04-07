@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mdziper"
+version = "0.1.0"
+description = "Compress Markdown to reduce word count while preserving content"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [{ name = "Shenyi Zhang", email = "daksimzhang@gmail.com" }]
+keywords = ["markdown", "compression", "word-count", "academic", "rebuttal"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Text Processing :: Markup :: Markdown",
+]
+
+[project.urls]
+Homepage = "https://github.com/shenyizg/mdziper"
+Repository = "https://github.com/shenyizg/mdziper"
+Issues = "https://github.com/shenyizg/mdziper/issues"
+
+[project.scripts]
+mdziper = "mdziper.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mdziper"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
