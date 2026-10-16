@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mdziper</title>
+<meta name="description" content="Compress Markdown to fit rebuttal word limits without cutting content. Runs entirely in your browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6f5e'/%3E%3Ctext x='16' y='23' font-family='monospace' font-size='20' font-weight='700' text-anchor='middle' fill='white'%3Ez%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f6f6f3;
+    --surface: #ffffff;
+    --border: #dedfd8;
+    --text: #1c1d1b;
+    --muted: #686a63;
+    --accent: #2f6f5e;
+    --accent-contrast: #ffffff;
+    --accent-soft: #e2efe9;
+    --danger: #b3261e;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151615;
+      --surface: #1e1f1e;
+      --border: #343632;
+      --text: #e7e8e3;
+      --muted: #9b9d96;
+      --accent: #7cc4ad;
+      --accent-contrast: #0e1f19;
+      --accent-soft: #213630;
+      --danger: #f2b8b5;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 var(--sans);
+  }
+  header, main, footer { width: 100%; max-width: 1320px; margin: 0 auto; padding: 0 16px; }
+  a { color: inherit; }
+
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding-top: 22px; padding-bottom: 14px; }
+  header h1 { margin: 0; font: 700 22px/1.2 var(--mono); letter-spacing: -0.02em; }
+  header p { margin: 0; flex: 1; min-width: 220px; color: var(--muted); }
+  header a { color: var(--muted); font-size: 14px; }
+
+  main { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg label { padding: 6px 16px; cursor: pointer; user-select: none; }
+  .seg label + input + label { border-left: 1px solid var(--border); }
+  .seg input:checked + label { background: var(--accent); color: var(--accent-contrast); }
+  .seg input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: -3px; }
+  .hint { color: var(--muted); font-size: 13.5px; flex: 1; min-width: 200px; }
+  .actions { display: flex; gap: 8px; }
+
+  button {
+    font: inherit;
+    font-size: 14px;
+    color: inherit;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 12px;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--muted); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); }
+
+  .status { margin: 0; font-size: 13.5px; color: var(--muted); }
+  .status:empty { display: none; }
+  .status.busy::before {
+    content: "";
+    display: inline-block;
+    width: 10px; height: 10px;
+    margin-right: 8px;
+    border: 2px solid var(--muted);
+    border-right-color: transparent;
+    border-radius: 50%;
+    vertical-align: -1px;
+    animation: spin 0.8s linear infinite;
+  }
+  .status.error { color: var(--danger); white-space: pre-wrap; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  details.rules { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  details.rules summary { padding: 8px 14px; cursor: pointer; user-select: none; font-size: 14px; }
+  details.rules summary .count { margin-left: 6px; }
+  .rule-body { padding: 4px 14px 14px; border-top: 1px solid var(--border); }
+  .rule-body h3 { margin: 12px 0 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .rule-body h3 small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .rule-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 2px 16px; }
+  .rule { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font-size: 13.5px; cursor: pointer; }
+  .rule input { margin: 0; accent-color: var(--accent); transform: translateY(1px); }
+  .rule code { font: 600 12.5px var(--mono); color: var(--accent); }
+  .rule .scope { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+  .rule:has(input:not(:checked)) span:not(.scope) { color: var(--muted); text-decoration: line-through; }
+  .rule-body[data-mode="standard"] section[data-mode="extreme"] { opacity: 0.55; }
+  .rule-actions { margin-top: 10px; }
+
+  .panes { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-height: 440px; }
+  .pane { display: flex; flex-direction: column; min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .pane.dropping { outline: 2px dashed var(--accent); outline-offset: -6px; }
+  .pane-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 7px 10px 7px 14px; border-bottom: 1px solid var(--border); }
+  .pane-head h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .pane-head .grow { flex: 1; }
+  .pane-head button { padding: 2px 10px; font-size: 13px; }
+  .count { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .pill { padding: 1px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pill[hidden] { display: none; }
+  textarea {
+    flex: 1;
+    width: 100%;
+    min-height: 380px;
+    padding: 14px;
+    border: 0;
+    outline: 0;
+    resize: none;
+    background: transparent;
+    color: inherit;
+    font: 13.5px/1.6 var(--mono);
+    tab-size: 4;
+  }
+  textarea::placeholder { color: var(--muted); }
+
+  footer { padding-top: 16px; padding-bottom: 22px; color: var(--muted); font-size: 13px; }
+
+  @media (max-width: 760px) {
+    .panes { grid-template-columns: 1fr; }
+    textarea { min-height: 260px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>mdziper</h1>
+  <p>Shrink Markdown word counts for rebuttals with strict limits, without cutting content.</p>
+  <a href="https://github.com/shenyizg/mdziper">GitHub</a>
+</header>
+
+<main>
+  <div class="toolbar">
+    <div class="seg" role="radiogroup" aria-label="Compression mode">
+      <input type="radio" name="mode" id="mode-standard" value="standard" checked>
+      <label for="mode-standard">Standard</label>
+      <input type="radio" name="mode" id="mode-extreme" value="extreme">
+      <label for="mode-extreme">Extreme</label>
+    </div>
+    <span class="hint" id="mode-hint"></span>
+    <span class="actions">
+      <button id="sample">Load sample</button>
+      <button id="open">Open file…</button>
+    </span>
+    <input type="file" id="file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden>
+  </div>
+
+  <p class="status busy" id="status" role="status">Loading Python runtime (the first visit takes a few seconds)…</p>
+
+  <details class="rules" id="rules">
+    <summary>Rules<span class="count" id="rules-off"></span></summary>
+    <div class="rule-body" id="rule-body"></div>
+  </details>
+
+  <div class="panes">
+    <section class="pane" id="input-pane">
+      <div class="pane-head">
+        <h2 id="input-label">Input</h2>
+        <span class="count" id="input-count"></span>
+        <span class="grow"></span>
+        <button id="clear">Clear</button>
+      </div>
+      <textarea id="input" aria-labelledby="input-label" spellcheck="false"
+        placeholder="Paste your Markdown here, or drop a .md file."></textarea>
+    </section>
+    <section class="pane">
+      <div class="pane-head">
+        <h2 id="output-label">Output</h2>
+        <span class="count" id="output-count"></span>
+        <span class="pill" id="savings" hidden></span>
+        <span class="grow"></span>
+        <button id="copy" class="primary" disabled>Copy</button>
+        <button id="download" disabled>Download</button>
+      </div>
+      <textarea id="output" aria-labelledby="output-label" spellcheck="false" readonly
+        placeholder="Compressed Markdown appears here."></textarea>
+    </section>
+  </div>
+</main>
+
+<footer>
+  Runs entirely in your browser via <a href="https://pyodide.org">Pyodide</a>. Your text is never uploaded.
+  <span id="version"></span>
+</footer>
+
+<script type="module">
+const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/";
+
+// Runs inside Pyodide after mdziper.zip (built from src/mdziper) is unpacked.
+const BRIDGE = `
+import json, sys
+sys.path.insert(0, "/home/pyodide/app")
+
+import mdziper
+from mdziper import compress
+from mdziper.rules import registry
+from mdziper.rules import global_rules, math_rules, text_rules  # noqa: F401 (registers rules)
+
+VERSION = mdziper.__version__
+RULES_JSON = json.dumps([
+    {"name": r.name, "mode": r.mode, "scope": r.scope, "description": r.description}
+    for r in registry.list_rules()
+])
+
+def run(text, mode, exclude_json):
+    r = compress(text, mode=mode, exclude=set(json.loads(exclude_json)))
+    return json.dumps({
+        "text": r.text,
+        "original": r.original_words,
+        "compressed": r.compressed_words,
+        "savings": r.savings,
+    })
+`;
+
+const MODE_HINTS = {
+  standard: "Removes whitespace that Markdown ignores: tables, math, blank lines, links.",
+  extreme: "Also joins words around punctuation, headings and tables. Output may look slightly different.",
+};
+
+const $ = (id) => document.getElementById(id);
+const els = {
+  input: $("input"), output: $("output"), status: $("status"), hint: $("mode-hint"),
+  inputCount: $("input-count"), outputCount: $("output-count"), savings: $("savings"),
+  copy: $("copy"), download: $("download"), file: $("file"),
+  ruleBody: $("rule-body"), rulesOff: $("rules-off"), inputPane: $("input-pane"),
+};
+
+// Per-browser conveniences only; the page works the same without storage.
+const store = {
+  get(key, fallback) {
+    try {
+      const v = localStorage.getItem("mdziper:" + key);
+      return v === null ? fallback : JSON.parse(v);
+    } catch { return fallback; }
+  },
+  set(key, value) {
+    try { localStorage.setItem("mdziper:" + key, JSON.stringify(value)); } catch {}
+  },
+};
+
+const state = {
+  mode: store.get("mode", "standard") === "extreme" ? "extreme" : "standard",
+  excluded: new Set(store.get("excluded", [])),
+  fileName: null,
+  rules: [],
+  run: null, // Python bridge, set once Pyodide is ready
+};
+
+function setStatus(text, kind = "") {
+  els.status.textContent = text;
+  els.status.className = "status " + kind;
+}
+
+const nf = new Intl.NumberFormat("en-US");
+function describe(words, text) {
+  const chars = [...text].length;
+  return `${nf.format(words)} ${words === 1 ? "word" : "words"} · ${nf.format(chars)} chars`;
+}
+
+function update() {
+  const text = els.input.value;
+  if (!state.run) return;
+  try {
+    const r = JSON.parse(state.run(text, state.mode, JSON.stringify([...state.excluded])));
+    els.output.value = r.text;
+    els.inputCount.textContent = text ? describe(r.original, text) : "";
+    els.outputCount.textContent = r.text ? describe(r.compressed, r.text) : "";
+    const saved = r.original - r.compressed;
+    els.savings.hidden = saved <= 0;
+    els.savings.textContent = `−${nf.format(saved)} words (${(r.savings * 100).toFixed(1)}%)`;
+    els.copy.disabled = els.download.disabled = !r.text;
+    setStatus("");
+  } catch (err) {
+    console.error(err);
+    setStatus("Compression failed:\n" + err.message, "error");
+  }
+}
+
+let timer = 0;
+function scheduleUpdate() {
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    store.set("input", els.input.value);
+    update();
+  }, 120);
+}
+
+function setInput(text, fileName = null) {
+  els.input.value = text;
+  state.fileName = fileName;
+  store.set("input", text);
+  update();
+}
+
+// --- Mode ---
+
+function applyMode() {
+  $("mode-" + state.mode).checked = true;
+  els.hint.textContent = MODE_HINTS[state.mode];
+  els.ruleBody.dataset.mode = state.mode;
+  renderRulesOff();
+}
+
+for (const radio of document.querySelectorAll('input[name="mode"]')) {
+  radio.addEventListener("change", () => {
+    state.mode = radio.value;
+    store.set("mode", state.mode);
+    applyMode();
+    update();
+  });
+}
+
+// --- Rules ---
+
+function renderRulesOff() {
+  const active = state.rules.filter((r) => state.mode === "extreme" || r.mode === "standard");
+  const off = active.filter((r) => state.excluded.has(r.name)).length;
+  els.rulesOff.textContent = state.rules.length
+    ? `${active.length - off} of ${active.length} on`
+    : "";
+}
+
+function renderRules() {
+  const sorted = [...state.rules].sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true }));
+  const sections = ["standard", "extreme"].map((mode) => {
+    const section = document.createElement("section");
+    section.dataset.mode = mode;
+    const h = document.createElement("h3");
+    h.innerHTML = mode === "standard" ? "Standard" : "Extreme <small>(applied in Extreme mode only)</small>";
+    const grid = document.createElement("div");
+    grid.className = "rule-grid";
+    for (const rule of sorted.filter((r) => r.mode === mode)) {
+      const label = document.createElement("label");
+      label.className = "rule";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = !state.excluded.has(rule.name);
+      box.addEventListener("change", () => {
+        if (box.checked) state.excluded.delete(rule.name);
+        else state.excluded.add(rule.name);
+        store.set("excluded", [...state.excluded]);
+        renderRulesOff();
+        update();
+      });
+      const code = document.createElement("code");
+      code.textContent = rule.name;
+      const desc = document.createElement("span");
+      desc.textContent = rule.description;
+      const scope = document.createElement("span");
+      scope.className = "scope";
+      scope.textContent = rule.scope;
+      label.append(box, code, desc, scope);
+      grid.append(label);
+    }
+    section.append(h, grid);
+    return section;
+  });
+
+  const actions = document.createElement("div");
+  actions.className = "rule-actions";
+  const reset = document.createElement("button");
+  reset.textContent = "Turn all rules on";
+  reset.addEventListener("click", () => {
+    state.excluded.clear();
+    store.set("excluded", []);
+    renderRules();
+    update();
+  });
+  actions.append(reset);
+
+  els.ruleBody.replaceChildren(...sections, actions);
+  renderRulesOff();
+}
+
+// --- Input sources ---
+
+async function loadFile(file) {
+  try {
+    setInput(await file.text(), file.name);
+  } catch (err) {
+    setStatus(`Could not read ${file.name}: ${err.message}`, "error");
+  }
+}
+
+$("open").addEventListener("click", () => els.file.click());
+els.file.addEventListener("change", () => {
+  if (els.file.files[0]) loadFile(els.file.files[0]);
+  els.file.value = "";
+});
+
+$("sample").addEventListener("click", async () => {
+  if (els.input.value.trim() && !confirm("Replace the current input with the sample rebuttal?")) return;
+  try {
+    const res = await fetch("sample.md", { cache: "no-cache" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    setInput(await res.text(), "sample_rebuttal.md");
+  } catch (err) {
+    setStatus("Could not load the sample: " + err.message, "error");
+  }
+});
+
+$("clear").addEventListener("click", () => {
+  setInput("");
+  els.input.focus();
+});
+
+els.input.addEventListener("input", scheduleUpdate);
+
+const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes("Files");
+els.inputPane.addEventListener("dragover", (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  els.inputPane.classList.add("dropping");
+});
+els.inputPane.addEventListener("dragleave", (e) => {
+  if (!els.inputPane.contains(e.relatedTarget)) els.inputPane.classList.remove("dropping");
+});
+els.inputPane.addEventListener("drop", (e) => {
+  els.inputPane.classList.remove("dropping");
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+
+// --- Output actions ---
+
+function flash(button, text) {
+  const original = button.dataset.label || (button.dataset.label = button.textContent);
+  button.textContent = text;
+  clearTimeout(button._flash);
+  button._flash = setTimeout(() => { button.textContent = original; }, 1400);
+}
+
+els.copy.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(els.output.value);
+  } catch {
+    els.output.select();
+    document.execCommand("copy");
+  }
+  flash(els.copy, "Copied");
+});
+
+els.download.addEventListener("click", () => {
+  const base = (state.fileName || "rebuttal.md").replace(/\.(md|markdown|txt)$/i, "");
+  const url = URL.createObjectURL(new Blob([els.output.value], { type: "text/markdown;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${base}.compressed.md`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+// --- Boot ---
+
+async function boot() {
+  try {
+    const [py, pkg] = await Promise.all([
+      import(PYODIDE_URL + "pyodide.mjs").then(({ loadPyodide }) => loadPyodide({ indexURL: PYODIDE_URL })),
+      fetch("mdziper.zip", { cache: "no-cache" }).then((res) => {
+        if (!res.ok) throw new Error(`mdziper.zip: HTTP ${res.status}`);
+        return res.arrayBuffer();
+      }),
+    ]);
+    py.unpackArchive(pkg, "zip", { extractDir: "/home/pyodide/app" });
+    py.runPython(BRIDGE);
+    state.run = py.globals.get("run");
+    state.rules = JSON.parse(py.globals.get("RULES_JSON"));
+    $("version").textContent = "· mdziper v" + py.globals.get("VERSION");
+    renderRules();
+    setStatus("");
+    update();
+  } catch (err) {
+    console.error(err);
+    setStatus("Failed to load the Python runtime: " + err.message + "\nCheck your connection and reload the page.", "error");
+  }
+}
+
+els.input.value = store.get("input", "");
+applyMode();
+boot();
+</script>
+</body>
+</html>

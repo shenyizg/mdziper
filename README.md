@@ -2,6 +2,19 @@
 
 Compress Markdown source text to reduce word count while preserving content. Designed for academic peer review rebuttals with strict word limits.
 
+## Web App
+
+Use it in the browser at **https://shenyizg.github.io/mdziper/**. No install is needed, and your text never leaves your machine: the page runs this Python package itself via [Pyodide](https://pyodide.org).
+
+Preview locally:
+
+```bash
+python web/build.py                   # writes _site/
+python -m http.server -d _site 8000   # open http://localhost:8000
+```
+
+`.github/workflows/pages.yml` redeploys the site on every push to `main` that touches `src/` or `web/`.
+
 ## Install
 
 ```bash
