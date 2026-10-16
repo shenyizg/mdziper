@@ -163,10 +163,28 @@ def test_hyphenate_reviewer_refs():
     assert hyphenate_reviewer_refs("reviewer u78b") == "reviewer-u78b"
 
 
+def test_hyphenate_reviewer_ids():
+    assert hyphenate_reviewer_refs("Reviewer #2") == "Reviewer-#2"
+    assert hyphenate_reviewer_refs("Reviewer xYzw") == "Reviewer-xYzw"
+    assert hyphenate_reviewer_refs("Reviewer KQBT") == "Reviewer-KQBT"
+    assert hyphenate_reviewer_refs("Reviewer 1's point") == "Reviewer-1's point"
+
+
 def test_hyphenate_reviewer_in_context():
     text = "We thank Reviewer 1 for their comments."
     result = hyphenate_reviewer_refs(text)
     assert "Reviewer-1" in result
+
+
+def test_hyphenate_reviewer_leaves_prose():
+    for text in [
+        "We thank the reviewer for their comments.",
+        "The reviewer raises a valid point.",
+        "As the reviewer said, Reviewer a few",
+        "The Reviewer Said so.",
+        "the reviewer abcde",
+    ]:
+        assert hyphenate_reviewer_refs(text) == text
 
 
 # --- Newline preservation (extreme rules must not collapse lines) ---

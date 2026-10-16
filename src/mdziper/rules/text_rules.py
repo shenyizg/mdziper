@@ -191,7 +191,31 @@ def underscore_heading_content(text: str) -> str:
     return re.sub(r"^(#{1,6} +)(.+)$", _replace, text, flags=re.MULTILINE)
 
 
+_REVIEWER_RE = re.compile(r"\b(reviewer) +(#?[A-Za-z0-9]+)\b", re.IGNORECASE)
+
+
+def _is_reviewer_id(token: str) -> bool:
+    """Tell a reviewer label apart from an ordinary word following 'reviewer'."""
+    token = token.lstrip("#")
+    if any(c.isdigit() for c in token):  # 1, #2, R1, u78b
+        return True
+    if len(token) == 1:  # A, B, ...
+        return token.isupper()
+    # OpenReview-style 4-letter IDs (xYzw, KQBT). Ordinary words are all
+    # lowercase or capitalized ('for', 'Said'), so those are left alone.
+    return len(token) == 4 and not (token.islower() or token.istitle())
+
+
 @registry.register("E17", "extreme", "text", "Replace spaces in Reviewer references with hyphens")
 def hyphenate_reviewer_refs(text: str) -> str:
-    """'Reviewer 1' -> 'Reviewer-1', 'Reviewer A' -> 'Reviewer-A', etc."""
-    return re.sub(r"(?i)(reviewer) +(\S+)", r"\1-\2", text)
+    """'Reviewer 1' -> 'Reviewer-1', 'Reviewer A' -> 'Reviewer-A', etc.
+
+    Prose such as 'the reviewer raises' is not touched.
+    """
+
+    def _replace(m):
+        if _is_reviewer_id(m.group(2)):
+            return f"{m.group(1)}-{m.group(2)}"
+        return m.group(0)
+
+    return _REVIEWER_RE.sub(_replace, text)

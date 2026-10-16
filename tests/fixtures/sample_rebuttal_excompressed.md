@@ -1,10 +1,10 @@
 # Response_to_Reviewer_1
 
-We thank the reviewer-for their insightful comments.We address each concern below.
+We thank the reviewer for their insightful comments.We address each concern below.
 
 ## 1.Experimental_Setup
 
-The reviewer-raises a valid point about the baseline comparisons.We have added results for two additional baselines:
+The reviewer raises a valid point about the baseline comparisons.We have added results for two additional baselines:
 
 |Method|Accuracy|F1-Score|Runtime|
 |------|--------|--------|-------|
